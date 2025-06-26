@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Date Science with R</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Peng Zhang" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Date Science with R
+]
+.subtitle[
+## Statistical models
+]
+.author[
+### Peng Zhang
+]
+.institute[
+### School of Mathematical Sciences, Zhejiang University
+]
+.date[
+### 2025/06/30
+]
+
+---
+
+
+
+
+### Agenda
+
+- Using data frames for statistical purposes
+- Manipulation of data into more convenient forms
+- (Re-)Introduction to linear models and the model space
+
+So You've Got A Data Frame. What can we do with it?
+
+- Plot it: examine multiple variables and distributions
+- Test it: compare groups of individuals to each other
+- Check it: does it conform to what we'd like for our needs?
+
+---
+### Test Case: Birth weight data
+
+Included in R already:
+
+
+``` r
+library(tidyverse)
+library(lubridate)
+library(MASS)
+data(birthwt)
+summary(birthwt)
+```
+
+```
+##       low              age             lwt             race      
+##  Min.   :0.0000   Min.   :14.00   Min.   : 80.0   Min.   :1.000  
+##  1st Qu.:0.0000   1st Qu.:19.00   1st Qu.:110.0   1st Qu.:1.000  
+##  Median :0.0000   Median :23.00   Median :121.0   Median :1.000  
+##  Mean   :0.3122   Mean   :23.24   Mean   :129.8   Mean   :1.847  
+##  3rd Qu.:1.0000   3rd Qu.:26.00   3rd Qu.:140.0   3rd Qu.:3.000  
+##  Max.   :1.0000   Max.   :45.00   Max.   :250.0   Max.   :3.000  
+##      smoke             ptl               ht                ui        
+##  Min.   :0.0000   Min.   :0.0000   Min.   :0.00000   Min.   :0.0000  
+##  1st Qu.:0.0000   1st Qu.:0.0000   1st Qu.:0.00000   1st Qu.:0.0000  
+##  Median :0.0000   Median :0.0000   Median :0.00000   Median :0.0000  
+##  Mean   :0.3915   Mean   :0.1958   Mean   :0.06349   Mean   :0.1481  
+##  3rd Qu.:1.0000   3rd Qu.:0.0000   3rd Qu.:0.00000   3rd Qu.:0.0000  
+##  Max.   :1.0000   Max.   :3.0000   Max.   :1.00000   Max.   :1.0000  
+##       ftv              bwt      
+##  Min.   :0.0000   Min.   : 709  
+##  1st Qu.:0.0000   1st Qu.:2414  
+##  Median :0.0000   Median :2977  
+##  Mean   :0.7937   Mean   :2945  
+##  3rd Qu.:1.0000   3rd Qu.:3487  
+##  Max.   :6.0000   Max.   :4990
+```
+
+---
+#### Make it readable!
+
+
+``` r
+colnames(birthwt)
+```
+
+```
+##  [1] "low"   "age"   "lwt"   "race"  "smoke" "ptl"   "ht"    "ui"    "ftv"  
+## [10] "bwt"
+```
+
+``` r
+colnames(birthwt) &lt;- c("birthwt.below.2500", "mother.age", 
+                       "mother.weight", "race",
+                       "mother.smokes", "previous.prem.labor", 
+                       "hypertension", "uterine.irr",
+                       "physician.visits", "birthwt.grams")
+```
+
+Let's make all the factors more descriptive.
+
+
+``` r
+birthwt$race &lt;- factor(c("white", "black", "other")[birthwt$race])
+birthwt$mother.smokes &lt;- factor(c("No", "Yes")[birthwt$mother.smokes + 1])
+birthwt$uterine.irr &lt;- factor(c("No", "Yes")[birthwt$uterine.irr + 1])
+birthwt$hypertension &lt;- factor(c("No", "Yes")[birthwt$hypertension + 1])
+```
+
+---
+### Bar plot for race
+
+
+``` r
+birthwt |&gt; ggplot(aes(x = race))+
+  geom_bar()+
+  labs(title = "Count of Mother's Race in Springfield MA, 1986")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-4-1.png)&lt;!-- --&gt;
+---
+### Scatter plot for mother's ages
+
+
+``` r
+birthwt |&gt; ggplot(aes(x = 1:nrow(birthwt), y = mother.age))+
+  geom_point()+
+  labs(x = 'number', title = "Mother's Ages in Springfield MA, 1986")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-5-1.png)&lt;!-- --&gt;
+---
+### Sorted mother's ages
+
+
+``` r
+birthwt |&gt; arrange(mother.age) |&gt; ggplot(aes(x = 1:nrow(birthwt), y = mother.age))+
+  geom_point()+
+  labs(x = 'number', title = "Mother's Ages in Springfield MA, 1986")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-6-1.png)&lt;!-- --&gt;
+
+---
+### Birth weight versus mother's ages
+
+
+``` r
+birthwt |&gt; ggplot(aes(x = mother.age, y = birthwt.grams))+
+  geom_point()+
+  labs(title = "Birth Weight by Mother's Age in Springfield MA, 1986")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+---
+### Boxplot
+
+Let's fit some models to the data pertaining to our outcome(s) of interest. 
+
+
+``` r
+birthwt |&gt; ggplot(aes(x = mother.smokes, y = birthwt.grams))+  
+  geom_boxplot()+
+  labs(title = "Birth Weight by Mother's Smoking Habit", y = "Birth Weight (g)", x="Mother Smokes")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-8-1.png)&lt;!-- --&gt;
+---
+### Basic statistical testing
+
+Tough to tell! Simple two-sample t-test:
+
+
+``` r
+t.test (birthwt$birthwt.grams[birthwt$mother.smokes == "Yes"], 
+        birthwt$birthwt.grams[birthwt$mother.smokes == "No"], var.equal = T)
+```
+
+```
+## 
+## 	Two Sample t-test
+## 
+## data:  birthwt$birthwt.grams[birthwt$mother.smokes == "Yes"] and birthwt$birthwt.grams[birthwt$mother.smokes == "No"]
+## t = -2.6529, df = 187, p-value = 0.008667
+## alternative hypothesis: true difference in means is not equal to 0
+## 95 percent confidence interval:
+##  -494.79735  -72.75612
+## sample estimates:
+## mean of x mean of y 
+##  2771.919  3055.696
+```
+---
+Does this difference match the linear model?
+
+
+``` r
+linear.model.1 &lt;- lm (birthwt.grams ~ mother.smokes, data=birthwt)
+summary(linear.model.1)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ mother.smokes, data = birthwt)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -2062.9  -475.9    34.3   545.1  1934.3 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)       3055.70      66.93  45.653  &lt; 2e-16 ***
+## mother.smokesYes  -283.78     106.97  -2.653  0.00867 ** 
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 717.8 on 187 degrees of freedom
+## Multiple R-squared:  0.03627,	Adjusted R-squared:  0.03112 
+## F-statistic: 7.038 on 1 and 187 DF,  p-value: 0.008667
+```
+---
+### Basic statistical testing
+
+Does this difference match the linear model?
+
+
+``` r
+linear.model.2 &lt;- lm (birthwt.grams ~ mother.age, data=birthwt)
+summary(linear.model.2)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ mother.age, data = birthwt)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2294.78  -517.63    10.51   530.80  1774.92 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)  2655.74     238.86   11.12   &lt;2e-16 ***
+## mother.age     12.43      10.02    1.24    0.216    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 728.2 on 187 degrees of freedom
+## Multiple R-squared:  0.008157,	Adjusted R-squared:  0.002853 
+## F-statistic: 1.538 on 1 and 187 DF,  p-value: 0.2165
+```
+
+---
+Diagnostics: R tries to make it as easy as possible (but no easier). Try in R proper:
+
+![](Chapter6_files/figure-html/unnamed-chunk-12-1.png)&lt;!-- --&gt;
+---
+### Detecting Outliers
+
+These are the default diagnostic plots for the analysis. Note that our oldest mother and her heaviest child are greatly skewing this analysis as we suspected. 
+
+
+``` r
+birthwt.noout &lt;- birthwt |&gt; filter(mother.age &lt;= 40)
+linear.model.3 &lt;- lm (birthwt.grams ~ mother.age, data=birthwt.noout)
+summary(linear.model.3)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ mother.age, data = birthwt.noout)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2245.89  -511.24    26.45   540.09  1655.48 
+## 
+## Coefficients:
+##             Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) 2833.273    244.954   11.57   &lt;2e-16 ***
+## mother.age     4.344     10.349    0.42    0.675    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 717.2 on 186 degrees of freedom
+## Multiple R-squared:  0.0009461,	Adjusted R-squared:  -0.004425 
+## F-statistic: 0.1761 on 1 and 186 DF,  p-value: 0.6752
+```
+---
+#### More complex models
+
+Add in smoking behavior:
+
+
+``` r
+linear.model.3a &lt;- lm (birthwt.grams ~ + mother.smokes + mother.age, data=birthwt.noout)
+summary(linear.model.3a)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ +mother.smokes + mother.age, data = birthwt.noout)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2081.22  -459.82    43.56   548.22  1551.51 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)      2954.582    246.280  11.997   &lt;2e-16 ***
+## mother.smokesYes -265.756    105.605  -2.517   0.0127 *  
+## mother.age          3.621     10.208   0.355   0.7232    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 707.1 on 185 degrees of freedom
+## Multiple R-squared:  0.03401,	Adjusted R-squared:  0.02357 
+## F-statistic: 3.257 on 2 and 185 DF,  p-value: 0.04072
+```
+---
+![](Chapter6_files/figure-html/unnamed-chunk-15-1.png)&lt;!-- --&gt;
+---
+### More complex models
+
+Add in smoking behavior:
+
+
+``` r
+linear.model.3b &lt;- lm (birthwt.grams ~ mother.age + mother.smokes + race, data=birthwt.noout)
+summary(linear.model.3b)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ mother.age + mother.smokes + race, 
+##     data = birthwt.noout)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2261.76  -422.49    15.98   512.00  1315.40 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)      2986.405    260.897  11.447  &lt; 2e-16 ***
+## mother.age         -5.050     10.056  -0.502 0.616136    
+## mother.smokesYes -410.656    108.635  -3.780 0.000212 ***
+## raceother           5.487    158.918   0.035 0.972492    
+## racewhite         442.799    154.023   2.875 0.004521 ** 
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 680.4 on 183 degrees of freedom
+## Multiple R-squared:  0.1153,	Adjusted R-squared:  0.09592 
+## F-statistic:  5.96 on 4 and 183 DF,  p-value: 0.000157
+```
+---
+![](Chapter6_files/figure-html/unnamed-chunk-17-1.png)&lt;!-- --&gt;
+---
+### Everything Must Go (In)
+
+Let's do a kitchen sink model on this new data set:
+
+
+``` r
+linear.model.4 &lt;- lm (birthwt.grams ~ ., data=birthwt.noout)
+summary(linear.model.4)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ ., data = birthwt.noout)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -985.04 -274.13  -13.87  262.53 1146.50 
+## 
+## Coefficients:
+##                       Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)          3360.5163   215.4112  15.600  &lt; 2e-16 ***
+## birthwt.below.2500  -1116.3933    70.8578 -15.755  &lt; 2e-16 ***
+## mother.age            -16.0321     6.4159  -2.499 0.013373 *  
+## mother.weight           1.9317     1.1208   1.723 0.086545 .  
+## raceother              68.8145   101.4451   0.678 0.498441    
+## racewhite             247.0241    96.4935   2.560 0.011302 *  
+## mother.smokesYes     -157.7041    68.6205  -2.298 0.022719 *  
+## previous.prem.labor    95.9825    65.3329   1.469 0.143573    
+## hypertensionYes      -185.2778   131.0126  -1.414 0.159060    
+## uterine.irrYes       -340.0918    88.8465  -3.828 0.000179 ***
+## physician.visits       -0.3519    29.5378  -0.012 0.990509    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 412.8 on 177 degrees of freedom
+## Multiple R-squared:  0.6851,	Adjusted R-squared:  0.6673 
+## F-statistic: 38.51 on 10 and 177 DF,  p-value: &lt; 2.2e-16
+```
+
+---
+### Everything Must Go (In), Except What Must Not
+
+Whoops! One of those variables was `birthwt.below.2500` which is a function of the outcome.
+
+
+``` r
+linear.model.4a &lt;- lm (birthwt.grams ~ . - birthwt.below.2500, data=birthwt.noout)
+summary(linear.model.4a)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ . - birthwt.below.2500, data = birthwt.noout)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1761.10  -454.81    46.43   459.78  1394.13 
+## 
+## Coefficients:
+##                     Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)         2545.584    323.204   7.876 3.21e-13 ***
+## mother.age           -12.111      9.909  -1.222 0.223243    
+## mother.weight          4.789      1.710   2.801 0.005656 ** 
+## raceother            155.605    156.564   0.994 0.321634    
+## racewhite            494.545    147.153   3.361 0.000951 ***
+## mother.smokesYes    -335.793    104.613  -3.210 0.001576 ** 
+## previous.prem.labor  -32.922    100.185  -0.329 0.742838    
+## hypertensionYes     -594.324    198.480  -2.994 0.003142 ** 
+## uterine.irrYes      -514.842    136.249  -3.779 0.000215 ***
+## physician.visits      -7.247     45.649  -0.159 0.874036    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 638 on 178 degrees of freedom
+## Multiple R-squared:  0.2435,	Adjusted R-squared:  0.2052 
+## F-statistic: 6.365 on 9 and 178 DF,  p-value: 8.255e-08
+```
+---
+![](Chapter6_files/figure-html/unnamed-chunk-20-1.png)&lt;!-- --&gt;
+---
+### Generalized Linear Models
+
+Maybe a linear increase in birth weight is less important than if it's below a threshold like 2500 grams (5.5 pounds). Let's fit a generalized linear model instead:
+
+``` r
+glm.0 &lt;- glm (birthwt.below.2500 ~ . - birthwt.grams, data=birthwt.noout)
+```
+---
+![](Chapter6_files/figure-html/unnamed-chunk-22-1.png)&lt;!-- --&gt;
+---
+### Generalized Linear Models
+The default value is a Gaussian model (a standard linear model). Change this:
+ 
+
+``` r
+glm.1 &lt;- glm (birthwt.below.2500 ~ . - birthwt.grams, data=birthwt.noout, family=binomial(link=logit))
+summary(glm.1)
+```
+
+```
+## 
+## Call:
+## glm(formula = birthwt.below.2500 ~ . - birthwt.grams, family = binomial(link = logit), 
+##     data = birthwt.noout)
+## 
+## Coefficients:
+##                      Estimate Std. Error z value Pr(&gt;|z|)   
+## (Intercept)          1.721830   1.258897   1.368  0.17140   
+## mother.age          -0.027537   0.037718  -0.730  0.46534   
+## mother.weight       -0.015474   0.006919  -2.237  0.02532 * 
+## raceother           -0.395505   0.537685  -0.736  0.46199   
+## racewhite           -1.269006   0.527180  -2.407  0.01608 * 
+## mother.smokesYes     0.931733   0.402359   2.316  0.02058 * 
+## previous.prem.labor  0.539549   0.345413   1.562  0.11828   
+## hypertensionYes      1.860521   0.697502   2.667  0.00764 **
+## uterine.irrYes       0.766517   0.458951   1.670  0.09489 . 
+## physician.visits     0.063402   0.172431   0.368  0.71310   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for binomial family taken to be 1)
+## 
+##     Null deviance: 233.92  on 187  degrees of freedom
+## Residual deviance: 201.15  on 178  degrees of freedom
+## AIC: 221.15
+## 
+## Number of Fisher Scoring iterations: 4
+```
+---
+![](Chapter6_files/figure-html/unnamed-chunk-24-1.png)&lt;!-- --&gt;
+---
+### What Do We Do With This, Anyway?
+
+Let's take a subset of this data to do predictions.
+
+
+``` r
+odds &lt;- seq(1, nrow(birthwt.noout), by=2)
+birthwt.in &lt;- birthwt.noout[odds,]
+birthwt.out &lt;- birthwt.noout[-odds,]
+linear.model.half &lt;- lm (birthwt.grams ~ . - birthwt.below.2500, data=birthwt.in)
+summary (linear.model.half)
+```
+
+```
+## 
+## Call:
+## lm(formula = birthwt.grams ~ . - birthwt.below.2500, data = birthwt.in)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -1705.17  -303.11    26.48   427.18  1261.57 
+## 
+## Coefficients:
+##                     Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)         2514.891    450.245   5.586 2.81e-07 ***
+## mother.age             7.052     14.935   0.472  0.63801    
+## mother.weight          2.683      2.885   0.930  0.35501    
+## raceother            113.948    224.519   0.508  0.61312    
+## racewhite            466.219    204.967   2.275  0.02548 *  
+## mother.smokesYes    -217.218    154.521  -1.406  0.16349    
+## previous.prem.labor -206.093    143.726  -1.434  0.15530    
+## hypertensionYes     -653.594    281.795  -2.319  0.02280 *  
+## uterine.irrYes      -547.884    193.386  -2.833  0.00577 ** 
+## physician.visits    -130.202     81.400  -1.600  0.11346    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 643.7 on 84 degrees of freedom
+## Multiple R-squared:  0.2585,	Adjusted R-squared:  0.1791 
+## F-statistic: 3.254 on 9 and 84 DF,  p-value: 0.001942
+```
+---
+
+``` r
+birthwt.predict &lt;- predict (linear.model.half)
+cor (birthwt.in$birthwt.grams, birthwt.predict)
+```
+
+```
+## [1] 0.508442
+```
+
+
+``` r
+tibble(x = birthwt.out$birthwt.grams, y = birthwt.predict) |&gt;
+  ggplot (aes(x = x, y = y)) + geom_point()
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-27-1.png)&lt;!-- --&gt;
+---
+### What Do We Do With This, Anyway?
+
+
+``` r
+birthwt.predict.out &lt;- predict (linear.model.half, birthwt.out)
+cor (birthwt.out$birthwt.grams, birthwt.predict.out)
+```
+
+```
+## [1] 0.3749431
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-29-1.png)&lt;!-- --&gt;
+---
+## Random number generators
+
+- We made reference to random number generation without going under the hood.
+- How _does_ R get "random" numbers? 
+- It doesn't, really -- it uses a trick that should be indistinguishable from the real McCoy
+
+Pseudorandom generators produce a deterministic sequence that is indistiguishable from a true random sequence if you don't know how it started.
+
+#### Example: `runif`, where we know where it started
+
+
+``` r
+runif(1:10)
+```
+
+```
+##  [1] 0.69731331 0.49422049 0.77964656 0.98497476 0.03847107 0.59479792
+##  [7] 0.61858268 0.89822554 0.50665171 0.26237437
+```
+
+``` r
+set.seed(10)
+runif(1:10)
+```
+
+```
+##  [1] 0.50747820 0.30676851 0.42690767 0.69310208 0.08513597 0.22543662
+##  [7] 0.27453052 0.27230507 0.61582931 0.42967153
+```
+
+``` r
+set.seed(10)
+runif(1:10)
+```
+
+```
+##  [1] 0.50747820 0.30676851 0.42690767 0.69310208 0.08513597 0.22543662
+##  [7] 0.27453052 0.27230507 0.61582931 0.42967153
+```
+---
+### Basic version: Linear Congruential Generator
+
+
+``` r
+seed &lt;- 10
+new.random &lt;- function (a=5, c=12, m=16) {
+  out &lt;- (a*seed + c) %% m  
+  seed &lt;&lt;- out
+  return(out)
+}
+out.length &lt;- 20
+variates &lt;- rep (NA, out.length)
+for (kk in 1:out.length) variates[kk] &lt;- new.random()
+variates
+```
+
+```
+##  [1] 14  2  6 10 14  2  6 10 14  2  6 10 14  2  6 10 14  2  6 10
+```
+---
+## Try again
+
+Period 8:
+
+
+``` r
+variates &lt;- rep (NA, out.length)
+for (kk in 1:out.length) variates[kk] &lt;- new.random(a=131, c=7, m=16)
+variates
+```
+
+```
+##  [1]  5  6  9  2 13 14  1 10  5  6  9  2 13 14  1 10  5  6  9  2
+```
+---
+## Try again, again
+
+Period 16:
+
+
+``` r
+variates &lt;- rep (NA, out.length)
+for (kk in 1:out.length) variates[kk] &lt;- new.random(a=129, c=7, m=16)
+variates
+```
+
+```
+##  [1]  9  0  7 14  5 12  3 10  1  8 15  6 13  4 11  2  9  0  7 14
+```
+
+---
+## Try again, at last
+
+Numerical Recipes uses
+
+``` r
+variates &lt;- rep (NA, out.length)
+for (kk in 1:out.length) variates[kk] &lt;- new.random(a=1664545, c=1013904223, m=2^32)
+variates
+```
+
+```
+##  [1] 1037207853 2090831916 4106096907  768378826 3835752553 1329121000
+##  [7] 2125006663 2668506502 3581687205 2079234980 2067291011 2197025090
+## [13] 3748878561 2913996384  758844863 4029469438 2836748829 1458315036
+## [19] 2399149563 2766656186
+```
+---
+### How To Distinguish Non-Randomness
+
+- We've covered period: if it's missing some values, it's distinguishable 
+- Uniformity of distribution in the limitx
+- Autocorrelation
+- Dimensional distribution -- not a problem for 1-D distributions, but can be for 2+-D
+
+---
+### How does R get everything we need?
+
+A few distributions of interest:
+
+- Uniform(0,1)
+- Bernoulli(p)
+- Binomial(n,p)
+- Gaussian(0,1)
+- Exponential(1)
+- Gamma(a)
+
+---
+### In R: everything we need
+
+Suppose we were working with the Exponential distribution.
+
+- `rexp()` generates variates from the distribution.
+- `dexp()` gives the probability density function.
+- `pexp()` gives the cumulative distribution function.
+- `qexp()` gives the quantiles.
+---
+#### `dexp()`
+
+``` r
+dexp(0:5)
+```
+
+```
+## [1] 1.000000000 0.367879441 0.135335283 0.049787068 0.018315639 0.006737947
+```
+
+``` r
+this.range &lt;- 0:50/5
+plot (this.range, dexp(this.range), ty="l")
+lines (this.range, dexp(this.range, rate=0.5), col="red")
+lines (this.range, dexp(this.range, rate=0.2), col="blue")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-35-1.png)&lt;!-- --&gt;
+---
+#### `pexp()`
+
+``` r
+pexp(0:5)
+```
+
+```
+## [1] 0.0000000 0.6321206 0.8646647 0.9502129 0.9816844 0.9932621
+```
+
+``` r
+this.range &lt;- 0:50/5
+plot (this.range, pexp(this.range), ty="l")
+lines (this.range, pexp(this.range, rate=0.5), col="red")
+lines (this.range, pexp(this.range, rate=0.2), col="blue")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-36-1.png)&lt;!-- --&gt;
+---
+#### `qexp()`
+
+``` r
+qexp(0:5)
+```
+
+```
+## Warning in qexp(0:5): NaNs produced
+```
+
+```
+## [1]   0 Inf NaN NaN NaN NaN
+```
+
+``` r
+this.range &lt;- seq(0,1,by=0.01)
+plot (this.range, qexp(this.range), ylim = c(0, 10), ty="l")
+lines (this.range, qexp(this.range, rate=0.5), col="red")
+lines (this.range, qexp(this.range, rate=0.2), col="blue")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-37-1.png)&lt;!-- --&gt;
+
+## Probability distributions
+- Distributions from data
+- Review of R for theoretical distributions
+- Fitting distributions to data
+- Checking distributions against data
+
+#### Let's Load Some Cheerful Data
+
+
+``` r
+data("cats", package="MASS")
+```
+---
+#### Let's Grab some Data
+
+The Standard and Poor's 500, or simply the S\&amp;P 500, is a stock market index tracking the stock performance of 500 large companies listed on exchanges in the United States. It is one of the most commonly followed equity indices.
+
+``` r
+library(readxl)
+SP &lt;- read_excel("data/Stock_Bond.xls") |&gt; dplyr::select(Date, `S&amp;P_AC`) |&gt;
+  rename(Index = `S&amp;P_AC`)
+```
+
+---
+
+
+``` r
+SP |&gt; ggplot(aes(x = Date, y = Index)) + geom_line()
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-40-1.png)&lt;!-- --&gt;
+
+---
+### Let's Transform Some Data
+
+The price `\(p_t\)` doesn't matter, what matters are the returns `\(r_t = \log{(p_t/p_{t-1})}\)`
+
+``` r
+returns &lt;- na.omit(as.vector(diff(log(SP$Index))))
+summary(returns)
+```
+
+```
+##       Min.    1st Qu.     Median       Mean    3rd Qu.       Max. 
+## -0.2289972 -0.0046537  0.0004976  0.0003368  0.0056195  0.0870888
+```
+
+``` r
+plot(returns, type="l")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-41-1.png)&lt;!-- --&gt;
+---
+
+### The Data's Distribution
+`quantile(x,probs)` calculates the quantiles at `probs` from `x`
+
+
+``` r
+quantile(returns,c(0.25,0.5,0.75))
+```
+
+```
+##           25%           50%           75% 
+## -0.0046537538  0.0004976042  0.0056195438
+```
+
+`ecdf()` - _e_ mpirical _c_ umulative _d_ istribution _f_ unction; no assumptions but also no guess about distribution between the observations
+
+In math, ECDF is often written as `\(\widehat{F}\)` or `\(\widehat{F}_n\)`
+
+---
+
+
+``` r
+plot(ecdf(returns), main="Empirical CDF of S&amp;P 500 index returns")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-43-1.png)&lt;!-- --&gt;
+
+&lt;small&gt;Conceptually, `quantile` and `ecdf` are inverses to each other&lt;/small&gt;
+---
+### Getting Probability Densities from Data
+
+`hist(x)` calculates a histogram from x
+- divide the data range up into equal-width bins and _count_ how many fall into each bin
+- _Or_ divide bin counts by (total count)*(width of bin), and get an estimate of the probability density function (pdf)  
+&lt;small&gt;Produces plot as a default side-effect&lt;/small&gt;
+---
+
+``` r
+hist(returns,n=101,probability=TRUE)
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-44-1.png)&lt;!-- --&gt;
+---
+### Probability Densities from Data (cont'd.)
+
+`density(x)` estimates the density of `x` by counting how many observations fall in a little window around each point, and then smoothing  
+    &lt;small&gt;"Bandwidth" `\(\approx\)` width of window around each point&lt;/small&gt;  
+    &lt;small&gt;Technically, a "kernel density estimate"&lt;/small&gt;  
+
+Remember: `density()` is an _estimate_ of the pdf, not The Truth
+
+`density` returns a collection of `\(x,y\)` values, suitable for plotting
+---
+
+``` r
+plot(density(returns),main="Estimated pdf of S&amp;P 500 index  returns")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-45-1.png)&lt;!-- --&gt;
+---
+### Probability Densities from Data (cont'd.)
+
+
+``` r
+hist(returns,n=101,probability=TRUE)
+lines(density(returns),lty="dashed")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-46-1.png)&lt;!-- --&gt;
+
+---
+### Getting distributions from data (cont'd.)
+
+`table()` - tabulate outcomes, most useful for discrete spaces; remember to normalize if you want probabilities
+
+
+``` r
+plot(table(cats$Sex)/nrow(cats),ylab="probability")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-47-1.png)&lt;!-- --&gt;
+
+---
+### Who Cares About the Distribution of the Data?
+
+- Overly detailed: every single observation recorded as a separate tick
+    + _Too much information_
+- The exact set of samples would never repeat if we re-ran things anyway
+    + _That information is wrong_
+- Try to _summarize_ what will _generalize_ to other situations
+    + Use a model, remember the model's parameters
+    
+---
+### R commands for distributions
+
+- `d`_foo_ = the probability _d_ ensity (if continuous) or probability mass function of _foo_ (pdf or pmf)
+- `p`_foo_ = the cumulative _p_ robability function (CDF)
+- `q`_foo_ = the _q_ uantile function (inverse to CDF)
+- `r`_foo_ = draw _r_ andom numbers from `foo` (first argument always the number of draws)
+
+`?Distributions` to see which distributions are built in
+
+If you write your own, follow the conventions
+---
+### Examples
+
+
+``` r
+dnorm(x=c(-1,0,1),mean=1,sd=0.1)
+```
+
+```
+## [1] 5.520948e-87 7.694599e-22 3.989423e+00
+```
+
+``` r
+pnorm(q=c(2,-2)) # defaults to mean=0,sd=1
+```
+
+```
+## [1] 0.97724987 0.02275013
+```
+
+``` r
+dbinom(5,size=7,p=0.7,log=TRUE)
+```
+
+```
+## [1] -1.146798
+```
+
+``` r
+qchisq(p=0.95,df=5)
+```
+
+```
+## [1] 11.0705
+```
+
+``` r
+rt(n=4,df=2)
+```
+
+```
+## [1]  0.4397369  1.1463390 -0.3783058 -1.3546069
+```
+
+---
+## Displaying Probability Distributions
+
+`curve` is very useful for the `d`, `p`, `q` functions:
+
+``` r
+curve(dgamma(x,shape=45,scale=1.9),from=0,to=200)
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-49-1.png)&lt;!-- --&gt;
+
+---
+### How Do We Fit Distributional Models to the Data?
+
+- Match moments (mean, variance, etc.)
+- Match other summary statistics
+- Maximize the likelihood
+
+
+#### Method of Moments (MM), Closed Form
+
+- Pick enough moments that they **identify** the parameters
+    + At least 1 moment per parameter; algebraically independent
+- Write equations for the moments in terms of the parameters  
+e.g., for gamma
+
+`$$\mu = as ~,~ \sigma^2 = as^2$$`
+- Do the algebra by hand to solve the equations
+
+`$$a=\mu^2/\sigma^2 ~,~ s = \sigma^2/\mu$$`
+- Code up the formulas (did this in lab 3)
+
+
+``` r
+gamma.est_MM &lt;- function(x) {
+  m &lt;- mean(x); v &lt;- var(x)
+  return(c(shape=m^2/v, scale=v/m))
+}
+```
+---
+### MM, Numerically
+
+- Write functions to get moments from parameters (usually algebra)
+- Set up the difference between data and model as another function
+
+```
+gamma.mean &lt;- function(shape,scale) { return(shape*scale) }
+gamma.var &lt;- function(shape,scale) { return(shape*scale^2) }
+gamma.discrepancy &lt;- function(shape,scale,x) {
+  return((mean(x)-gamma.mean(shape,scale))^2 + (var(x)-gamma.mean(shape,scale))^2)
+}
+```
+
+- Minimize it
+---
+### More Generally...
+
+- Nothing magic about moments
+- Match other data summaries, say the median
+    + Or even more complicated things, like ratios of quantiles  
+    + &lt;small&gt;You did this in lab&lt;/small&gt;
+- If you can't solve exactly for parameters from the summaries, set up a discrepancy function and minimize it
+    + &lt;small&gt;You are doing this in the HW&lt;/small&gt;
+- The summaries just have to converge on population values
+
+---
+
+### Maximum Likeihood
+
+- Usually we think of the parameters as fixed and consider the probability of different outcomes, `\(f(x;\theta)\)` with `\(\theta\)` constant and `\(x\)` changing
+- **Likelihood** of a parameter value = `\(L(\theta)\)` = what probability does `\(\theta\)` give to the data?
+    + For continuous variables, use probability density
+    + `\(f(x;\theta)\)` but letting `\(\theta\)` change while data constant
+    + _Not_ the probability of `\(\theta\)`, if that even makes sense
+- **Maximum likelihood** = guess that the parameter is whatever makes the data most likely
+- Most likely parameter value = **maximum likelihood estimate** = **MLE**
+
+---
+### Likelihood in Code
+
+- With independent data points `\(x_1, x_2, x_n\)`, likelihood is
+
+`$$L(\theta) = \prod_{i=1}^{n}{f(x_i;\theta)}$$`
+- Multiplying lots of small numbers is numerically bad; take the log:
+
+`$$\ell(\theta) = \sum_{i=1}^{n}{\log{f(x_i;\theta)}}$$`
+- In pseudo-code:
+
+```
+loglike.foo &lt;- function(params, x) {
+  sum(dfoo(x=x,params,log=TRUE))
+}
+```
+---
+### What Do We Do with the Likelihood?
+
+- We maximize it!
+- Sometimes we can do the maximization by hand with some calculus
+    + For Gaussian, MLE = just match the mean and variance
+    + For Pareto, MLE `\(\widehat{a} = 1 + 1/\overline{\log{(x/x_{\mathrm{min}})}}\)`
+- Doing numerical optimization
+    + Stick in a minus sign if we're using a minimization function
+    
+---
+### Why Use the MLE?
+
+- Usually (but not always) _consistent_: converges on the truth as we get more data
+- Usually (but not always) _efficient_: converges on the truth at least as fast as anything else
+
+- There are some parameters where the maximum isn't well-defined (e.g. `\(x_{\mathrm{min}}\)` for a Pareto)
+- Sometimes the data is too aggregated or mangled to use the MLE (as with the income data in lab 5)
+
+---
+### fitdistr
+
+MLE for one-dimensional distributions can be done through `fitdistr` in the `MASS` package
+
+It knows about most the standard distributions, but you can also give it arbitrary probability density functions and it will try to maximize them  
+A starting value for the optimization is optional for some distributions, required for others (including user-defined densities)
+
+Returns the parameter estimates and standard errors  
+SEs come from large `\(n\)` approximations so use cautiously
+
+---
+### fitdistr Examples
+
+Fit the gamma distribution to the cats' hearts:
+
+``` r
+require(MASS)
+fitdistr(cats$Hwt, densfun="gamma")
+```
+
+```
+##      shape         rate   
+##   20.2998092    1.9095724 
+##  ( 2.3729252) ( 0.2259942)
+```
+Returns: estimates above, standard errors below
+
+Fit the Students `\(t\)` distribution to the returns:
+
+``` r
+fitdistr(returns,"t")
+```
+
+```
+##         m              s              df     
+##   0.0005103602   0.0071003759   3.5882142134 
+##  (0.0001206711) (0.0001290377) (0.2076614177)
+```
+Here parameters are location (m), scale (s) and degrees of freedom (very heavy tails)
+
+---
+### fitdistr Examples (cont'd.)
+
+User-defined density:
+
+``` r
+dpareto &lt;- function(x,exponent,xmin,log=FALSE) {
+  f &lt;- (exponent-1)/xmin * (x/xmin)^(-exponent)
+  f &lt;- ifelse(x&lt;xmin,NA,f)
+  if(!log) { return(f) } else (return(log(f)))
+}
+# Fit pareto to large absolute returns
+  # Parameters given outside the "start" list are fixed
+fitdistr(abs(returns)[abs(returns)&gt;0.05], densfun=dpareto,
+         start=list(exponent=2.5), xmin=0.05)
+```
+
+```
+## Warning in stats::optim(x = c(0.0529756421537337, 0.228997226565671, 0.0519535460407683, : one-dimensional optimization by Nelder-Mead is unreliable:
+## use "Brent" or optimize() directly
+```
+
+```
+##    exponent 
+##   3.9960938 
+##  (0.8309668)
+```
+
+---
+### Checking Your Estimator
+
+- simulate, then estimate; estimates should converge as the sample grows
+
+``` r
+gamma.est_MM(rgamma(100,shape=19,scale=45))
+```
+
+```
+##    shape    scale 
+## 20.72856 41.69062
+```
+
+``` r
+gamma.est_MM(rgamma(1e5,shape=19,scale=45))
+```
+
+```
+##    shape    scale 
+## 19.00673 44.88559
+```
+
+``` r
+gamma.est_MM(rgamma(1e6,shape=19,scale=45))
+```
+
+```
+##    shape    scale 
+## 18.99762 45.01647
+```
+---
+### Checking the Fit
+
+_Use your eyes_: Graphic overlays of theory vs. data
+
+``` r
+plot(density(cats$Hwt))
+cats.gamma &lt;- gamma.est_MM(cats$Hwt)
+curve(dgamma(x,shape=cats.gamma["shape"],scale=cats.gamma["scale"]),add=TRUE,col="blue")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-55-1.png)&lt;!-- --&gt;
+
+---
+### Checking the Fit (cont'd.)
+
+- Calculate summary statistics _not_ used in fitting, compare them to the fitted model
+
+``` r
+# Really bad and good days for index fund holders, per model:
+qnorm(c(0.01,0.99),mean=mean(returns),sd=sd(returns))
+```
+
+```
+## [1] -0.02487668  0.02555036
+```
+
+``` r
+# As it happened:
+quantile(returns,c(0.01,0.99)) 
+```
+
+```
+##          1%         99% 
+## -0.02730130  0.02765495
+```
+---
+### Quantile-Quantile (QQ) Plots
+
+- Plot theoretical vs. actual quantiles
+- _or_ plot quantiles of two samples against each other
+- Ideally, a straight line when the distributions are the same
+- `qqnorm`, `qqline` are specialized for checking normality
+
+
+``` r
+qqnorm(returns); qqline(returns)
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-57-1.png)&lt;!-- --&gt;
+
+---
+### QQ Plots (cont'd)
+
+- `qqplot(x,y)` will do a Q-Q plot of one vector against another
+
+``` r
+qqplot(returns,qt((1:500)/501,df=3.59))
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-58-1.png)&lt;!-- --&gt;
+
+---
+### Calibration Plots
+
+- If the distribution is right, 50% of the data should be below the median, 90% should be below the 90th percentile, etc.
+- Special case of **calibration** of probabilities: events with probability _p_% should happen about _p_% of the time, not more and not less
+- We can look at calibraton by calculating the (empirical) CDF of the (theoretical) CDF and plotting
+    + Ideal calibration plot is a straight line up the diagonal
+    + Systematic deviations are a warning sign
+    
+---
+### Making a Calibration Plot
+
+
+``` r
+plot(ecdf(pnorm(returns, mean=mean(returns), sd=sd(returns))),
+     main="Calibration of Gaussian distribution for returns")
+abline(0,1,col="grey")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-59-1.png)&lt;!-- --&gt;
+Again, way too many large changes (in either direction)
+
+---
+### Calibration Plots (cont'd.)
+
+
+``` r
+SP.t &lt;- coefficients(fitdistr(returns,"t"))
+plot(ecdf(pt((returns-SP.t[1])/SP.t[2], df=SP.t[3])),
+     main="Calibration of t distribution for returns")
+abline(0,1,col="grey")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-60-1.png)&lt;!-- --&gt;
+
+---
+### Calibration Plots (cont'd.)
+
+
+``` r
+plot(ecdf(pgamma(cats$Hwt, shape=cats.gamma["shape"], scale=cats.gamma["scale"])),
+     main="Calibration of gamma distribution for cats' hearts")
+abline(0,1,col="grey")
+```
+
+![](Chapter6_files/figure-html/unnamed-chunk-61-1.png)&lt;!-- --&gt;
+---
+### Calibration Plots (cont'd.)
+
+_Challenge_: Write a general function for making a calibraton plot, taking a
+data vector, a cumulative probability function, and a parameter vector
+
+
+#### Kolmogorov-Smirnov Test
+
+- How much should the QQ plot or calibration plot wiggle around the diagonal?
+- Answer a different question...
+- Biggest gap between theoretical and empirical CDF:
+
+`$$D_{KS} = \max_{x}{\left|F(x)-\widehat{F}(x)\right|}$$`
+
+- Useful because `\(D_{KS}\)` always has the same distribution _if_ the theoretical CDF is fixed and correct, and K+S calculated this back in the day
+- Also works for comparing the empirical CDFs of two samples, to see if they came from the same distribution
+
+---
+### KS Test, Data vs. Theory
+
+
+``` r
+ks.test(returns,pnorm,mean=0,sd=0.0125)
+```
+
+```
+## 
+## 	Asymptotic one-sample Kolmogorov-Smirnov test
+## 
+## data:  returns
+## D = 0.10893, p-value &lt; 2.2e-16
+## alternative hypothesis: two-sided
+```
+- More complicated (and _not_ properly handled by built-in R) if parameters are estimated
+    + Estimating parameters makes the fit look _better_ than it really is, so it doesn't help save the model when it gets really rejected (like this one is)
+
+Hack: Estimate using (say) 90% of the data, and then check the fit on the remaining 10%
+---
+
+``` r
+train &lt;- sample(1:length(returns),size=round(0.9*length(returns)))
+SP.t_train &lt;- coefficients(fitdistr(returns[train],"t"))
+returns.test_standardized &lt;- (returns[-train]-SP.t_train[1])/SP.t_train[2]
+ks.test(returns.test_standardized,pt,df=SP.t_train[3])
+```
+
+```
+## 
+## 	Asymptotic one-sample Kolmogorov-Smirnov test
+## 
+## data:  returns.test_standardized
+## D = 0.037817, p-value = 0.4772
+## alternative hypothesis: two-sided
+```
+
+- Can also test whether two samples come from same distribution
+
+``` r
+n &lt;- length(returns)
+half &lt;- round(n/2)
+ks.test(returns[1:half], returns[(half+1):n])
+```
+
+```
+## 
+## 	Asymptotic two-sample Kolmogorov-Smirnov test
+## 
+## data:  returns[1:half] and returns[(half + 1):n]
+## D = 0.099154, p-value = 5.103e-11
+## alternative hypothesis: two-sided
+```
+---
+### Chi-Squared Test for Discrete Distributions
+
+Compare an actual table of counts to a hypothesized probability distribution
+
+e.g., as many up days as down?
+
+``` r
+up_or_down &lt;- ifelse(returns &gt; 0, 1, -1)
+# 1936 down days, 1772 up days
+chisq.test(table(up_or_down),p=c(1/2,1/2))
+```
+
+```
+## 
+## 	Chi-squared test for given probabilities
+## 
+## data:  table(up_or_down)
+## X-squared = 20.896, df = 1, p-value = 4.85e-06
+```
+
+#### Chi-Squared Test: Degrees of Freedom
+
+- The `\(p\)`-value calculated by `chisq.test` assumes that all the probabilities in `\(p\)` were _fixed_, not estimated from the data used for testing, so `df =` number of cells in the table `\(-1\)`
+- If we estimate `\(q\)` parameters, we need to subtract `\(q\)` degrees of freedom
+---
+### Chi-Squared Test for Continuous Distributions
+
+- Divide the range into bins and count the number of observations in each bin; this will be `x` in `chisq.test()`
+- Use the CDF function `p` _foo_ to calculate the theoretical probability of each bin; this is `p`
+- Plug in to `chisq.test`
+- If parameters are estimated, adjust
+
+- `hist()` gives us break points and counts:
+
+
+``` r
+cats.hist &lt;- hist(cats$Hwt,plot=FALSE)
+cats.hist$breaks
+```
+
+```
+## [1]  6  8 10 12 14 16 18 20 22
+```
+
+``` r
+cats.hist$counts
+```
+
+```
+## [1] 20 45 42 23 11  2  0  1
+```
+---
+### Chi-Squared for Continuous Data (cont'd.)
+
+Use these for a `\(\chi^2\)` test:
+
+``` r
+# Why the padding by -Inf and Inf?
+p &lt;- diff(pgamma(c(-Inf,cats.hist$breaks,Inf),shape=cats.gamma["shape"],
+                 scale=cats.gamma["scale"]))
+# Why the padding by 0 and 0?
+x2 &lt;- chisq.test(c(0,cats.hist$counts,0),p=p)$statistic
+# Why +2? Why -length(cats.gamma)?
+pchisq(x2,df=length(cats.hist$counts)+2 - length(cats.gamma))
+```
+
+```
+## X-squared 
+##  0.854616
+```
+Don't need to run `hist` first; can also use `cut` to discretize (see `?cut`)
+
+- This is all a bit old-school
+    + Loss of information from discretization
+    + Lots of work just to use `\(\chi^2\)`
+- Try e.g. `ks.test` with an independent test set
+
+---
+### Summary
+
+- Visualizing and computing empirical distribution
+- Parametric distributions are models
+- Methods of fitting: moments, generalized moments, likelihood
+- Methods of checking: visual comparisons, other statistics, tests, calibration
+
+---
+### Aside: Some Math for MM and GMM
+
+- Parameter `\(\theta\)` is a `\(p\)`-dimensional vector, true value = `\(\theta^*\)`
+- Introduce `\(q \geq p\)` **functionals** `\(g_1, \ldots g_q\)`, which we can calculate either from the parameter `\(\theta\)` or from the data `\(x_{1:n}\)`
+- _Assume_ that for each `\(i\)`, `\(g_i(x_{1:n}) \rightarrow g_i(\theta^*)\)`
+- _Define_
+
+`$$\widehat{\theta}_{GMM} = \mathrm{argmin}_{\theta}{\sum_{i=1}^{q}{(g_i(\theta) - g_i(x_{1:n}))^2}}$$`
+
+---
+### Math for MM and GMM (cont'd.)
+
+- Shouldn't be hard to believe that `\(\widehat{\theta}_{GMM} \rightarrow \theta^*\)`
+- But why give equal attention to every functional?
+    + More weight on the more-precisely-measured functionals
+    + More weight on the more-sensitive-to `\(\theta\)` functionals
+    + Less weight on partially-redundant functionals
+-  _Abbreviate_ `\(g(\theta)\)` for `\((g_1(\theta), \ldots g_q(\theta))\)`, and likewise `\(g(x_{1:n})\)`, so
+
+`$$\widehat{\theta}_{GMM} = \mathrm{argmin}_{\theta}{(g(\theta)-g(x_{1:n}))^T(g(\theta)-g(x_{1:n}))}$$`
+
+- Generalize by introducing any positive-definite matrix `\(\Omega\)`:
+
+`$$\widehat{\theta}_{GMM} = \mathrm{argmin}_{\theta}{(g(\theta)-g(x_{1:n}))^T \Omega (g(\theta)-g(x_{1:n}))}$$`
+
+- Optimal `\(\Omega\)` turns out to be the variance matrix of `\(g(\theta^*)\)`
+- Iterative approximation: start with no weighting, estimate that variance matrix, re-do the estimate with weights, etc.
+
+---
+### Aside: Some Math for the MLE
+
+- More convenient to work with the mean log likelihood:
+
+`$$\Lambda(\theta) = \frac{1}{n}\sum_{i=1}^{n}{\log{f(X_i;\theta)}}$$`
+
+- This is a sample average so the law of large numbers applies:
+
+`$$\Lambda(\theta) \rightarrow \mathbf{E}[\Lambda(\theta)] = \lambda(\theta)$$`
+
+- The true parameter has higher average log-likelihood than anything else: if `\(\theta \neq \theta^*\)`
+
+`$$\theta \neq \theta^* ~ \Rightarrow \lambda(\theta) &lt; \lambda(\theta^*)$$`
+
+- Some extra conditions are needed for
+
+`$$\widehat{\theta}_{MLE} \rightarrow \theta^*$$`
+
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

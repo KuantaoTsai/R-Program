@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Data Science with R</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Peng Zhang" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Data Science with R
+]
+.subtitle[
+## Data type and data structure
+]
+.author[
+### Peng Zhang
+]
+.institute[
+### School of Mathematical Sciences, Zhejiang University
+]
+.date[
+### 2025/06/26
+]
+
+---
+
+
+## Data Type
+
+All data is represented in binary format, by **bits** (TRUE/FALSE, YES/NO, 1/0)
+
+- **Booleans** Direct binary values: `TRUE` or `FALSE` in R
+- **Integers**: whole numbers (positive, negative or zero), represented by a fixed-length block of bits
+- **Characters** fixed-length blocks of bits, with special coding;
+**strings** = sequences of characters
+- **Floating point numbers**: a fraction (with a finite number of bits) times an exponent, like `\(1.87 \times {10}^{6}\)`, but in binary form
+- **Missing or ill-defined values**: `NA`, `NaN`, etc.
+
+---
+### More types
+
+`typeof()` function returns the type
+
+`is.`_foo_`()` functions return Booleans for whether the argument is of type _foo_
+
+`as.`_foo_`()` (tries to) "cast" its argument to type _foo_ --- to translate it sensibly into a _foo_-type value
+
+
+``` r
+typeof(7)
+```
+
+```
+## [1] "double"
+```
+
+``` r
+is.numeric(7)
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+is.na(7/0)
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+is.na(0/0)  # Why is 7/0 not NA, but 0/0 is?
+```
+
+```
+## [1] TRUE
+```
+---
+
+
+``` r
+is.character(7)
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+is.character("7")
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+is.character("seven")
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+is.na("seven")
+```
+
+```
+## [1] FALSE
+```
+---
+
+``` r
+as.character(5/6)
+```
+
+```
+## [1] "0.833333333333333"
+```
+
+``` r
+as.numeric(as.character(5/6))
+```
+
+```
+## [1] 0.8333333
+```
+
+``` r
+6*as.numeric(as.character(5/6))
+```
+
+```
+## [1] 5
+```
+
+``` r
+5/6 == as.numeric(as.character(5/6))
+```
+
+```
+## [1] FALSE
+```
+&lt;small&gt;(why is that last FALSE?)&lt;/small&gt;
+
+---
+### Data can have names
+
+We can give names to data objects; these give us **variables**
+
+A few variables are built in:
+
+``` r
+pi
+```
+
+```
+## [1] 3.141593
+```
+Variables can be arguments to functions or operators, just like constants:
+
+``` r
+pi*10
+```
+
+```
+## [1] 31.41593
+```
+
+``` r
+cos(pi)
+```
+
+```
+## [1] -1
+```
+---
+### Peculiarites of floating-point numbers
+
+The more bits in the fraction part, the more precision
+
+The R floating-point data type is a `double`, a.k.a. `numeric`
+&lt;small&gt;back when memory was expensive, the now-standard
+number of bits was twice the default&lt;/small&gt;
+
+Finite precision `\(\Rightarrow\)` arithmetic on `doubles` `\(\neq\)` arithmetic on `\(\mathbb{R}\)`.
+
+
+``` r
+0.45 == 3 * 0.15
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+0.45 - 3 * 0.15
+```
+
+```
+## [1] 5.551115e-17
+```
+
+---
+
+Often ignorable, but not always
+- Rounding errors tend to accumulate in long calculations
+- When results should be `\(\approx 0\)`, errors can flip signs
+- Usually better to use `all.equal()` than exact comparison
+
+``` r
+(0.5 - 0.3) == (0.3 - 0.1)
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+all.equal(0.5 - 0.3, 0.3 - 0.1)
+```
+
+```
+## [1] TRUE
+```
+
+---
+## Data structures
+
+- Vectors
+- Arrays
+- Matrices
+- Lists
+- Dataframes
+- Structures of structures
+
+---
+### First data structure: vectors
+
+Group related data values into one object, a **data structure**
+
+A **vector** is a sequence of values, all of the same type
+
+``` r
+x &lt;- c(7, 8, 10, 45)
+x
+```
+
+```
+## [1]  7  8 10 45
+```
+
+``` r
+is.vector(x)
+```
+
+```
+## [1] TRUE
+```
+---
+`c()` function returns a vector containing all its arguments in order
+
+`x[1]` is the first element, `x[4]` is the 4th element  
+`x[-4]` is a vector containing all but the fourth element
+
+`vector(length=6)` returns an empty vector of length 6; helpful for filling things up later
+
+``` r
+weekly_hours &lt;- vector(length=5)
+weekly_hours[5] &lt;- 8
+```
+
+---
+
+### Vector arithmetic
+
+Operators apply to vectors "pairwise" or "elementwise":
+
+``` r
+y &lt;- c(-7, -8, -10, -45)
+x + y
+```
+
+```
+## [1] 0 0 0 0
+```
+
+``` r
+x * y
+```
+
+```
+## [1]   -49   -64  -100 -2025
+```
+
+---
+### Recycling
+
+**Recycling** repeat elements in shorter vector when combined with longer
+
+``` r
+x + c(-7, -8)
+```
+
+```
+## [1]  0  0  3 37
+```
+
+``` r
+x ^ c(1, 0, -1, 0.5)
+```
+
+```
+## [1] 7.000000 1.000000 0.100000 6.708204
+```
+
+Single numbers are vectors of length 1 for purposes of recycling:
+
+``` r
+2 * x
+```
+
+```
+## [1] 14 16 20 90
+```
+---
+
+Can also do pairwise comparisons:
+
+``` r
+x &gt; 9
+```
+
+```
+## [1] FALSE FALSE  TRUE  TRUE
+```
+Note: returns Boolean vector
+
+Boolean operators work elementwise:
+
+``` r
+(x &gt; 9) &amp; (x &lt; 20)
+```
+
+```
+## [1] FALSE FALSE  TRUE FALSE
+```
+
+---
+
+To compare whole vectors, best to use `identical()` or `all.equal()`:
+
+``` r
+x == -y
+```
+
+```
+## [1] TRUE TRUE TRUE TRUE
+```
+
+``` r
+identical(x, -y)
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+identical(c(0.5 - 0.3, 0.3 - 0.1), c(0.3 - 0.1, 0.5 - 0.3))
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+all.equal(c(0.5 - 0.3, 0.3 - 0.1), c(0.3 - 0.1, 0.5 - 0.3))
+```
+
+```
+## [1] TRUE
+```
+---
+
+### Addressing vectors
+
+Vector of indices:
+
+``` r
+x[c(2,4)]
+```
+
+```
+## [1]  8 45
+```
+
+Vector of negative indices
+
+``` r
+x[c(-1,-3)]
+```
+
+```
+## [1]  8 45
+```
+&lt;small&gt;(why that, and not  `8 10`?)&lt;/small&gt;
+
+---
+
+Boolean vector:
+
+``` r
+x[x&gt;9]
+```
+
+```
+## [1] 10 45
+```
+
+``` r
+y[x&gt;9]
+```
+
+```
+## [1] -10 -45
+```
+
+`which()` turns a Boolean vector in vector of TRUE indices:
+
+``` r
+places &lt;- which(x &gt; 9)
+places
+```
+
+```
+## [1] 3 4
+```
+
+``` r
+y[places]
+```
+
+```
+## [1] -10 -45
+```
+
+---
+### Named components
+
+You can give names to elements or components of vectors
+
+``` r
+names(x) &lt;- c("v1","v2","v3","fred")
+names(x)
+```
+
+```
+## [1] "v1"   "v2"   "v3"   "fred"
+```
+
+``` r
+x[c("fred","v1")]
+```
+
+```
+## fred   v1 
+##   45    7
+```
+note the labels in what R prints; not actually part of the value
+
+---
+
+`names(x)` is just another vector (of characters):
+
+``` r
+names(y) &lt;- names(x)
+sort(names(x))
+```
+
+```
+## [1] "fred" "v1"   "v2"   "v3"
+```
+
+``` r
+which(names(x)=="fred")
+```
+
+```
+## [1] 4
+```
+
+---
+
+### Functions on vectors
+
+Lots of functions take vectors as arguments:
+- `mean()`, `median()`, `sd()`, `var()`, `max()`, `min()`, `length()`, `sum()`: return single numbers
+- `sort()` returns a new vector
+- `hist()` takes a vector of numbers and produces a histogram, a highly structured object, with the side-effect of making a plot
+- Similarly `ecdf()` produces a cumulative-density-function object
+- `summary()` gives a five-number summary of numerical vectors
+- `any()` and `all()` are useful on Boolean vectors
+
+Not all functions have (or require) arguments:
+
+``` r
+date()
+```
+
+```
+## [1] "Mon Jun 23 14:25:38 2025"
+```
+---
+### Vector structures, starting with arrays
+
+Many data structures in R are made by adding bells and whistles to vectors, so "vector structures"
+
+Most useful: **arrays**
+
+``` r
+x &lt;- c(7, 8, 10, 45)
+x.arr &lt;- array(x,dim=c(2,2))
+x.arr
+```
+
+```
+##      [,1] [,2]
+## [1,]    7   10
+## [2,]    8   45
+```
+`dim` says how many rows and columns; filled by columns
+
+Can have `\(3, 4, \ldots n\)` dimensional arrays; `dim` is a length `\(n\)` vector
+
+---
+
+Some properties of the array:
+
+``` r
+dim(x.arr)
+```
+
+```
+## [1] 2 2
+```
+
+``` r
+is.vector(x.arr)
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+is.array(x.arr)
+```
+
+```
+## [1] TRUE
+```
+
+---
+
+``` r
+typeof(x.arr)
+```
+
+```
+## [1] "double"
+```
+
+``` r
+str(x.arr)
+```
+
+```
+##  num [1:2, 1:2] 7 8 10 45
+```
+
+``` r
+attributes(x.arr)
+```
+
+```
+## $dim
+## [1] 2 2
+```
+`typeof()` returns the type of the _elements_
+
+`str()` gives the **structure**: here, a numeric array, with two dimensions, both indexed 1--2, and then the actual numbers
+
+Exercise: try all these with `x`
+
+---
+### Accessing and operating on arrays
+
+Can access a 2-D array either by pairs of indices or by the underlying vector:
+
+``` r
+x.arr[1,2]
+```
+
+```
+## [1] 10
+```
+
+``` r
+x.arr[3]
+```
+
+```
+## [1] 10
+```
+
+Omitting an index means "all of it":
+
+``` r
+x.arr[c(1:2),2]
+```
+
+```
+## [1] 10 45
+```
+
+``` r
+x.arr[,2]
+```
+
+```
+## [1] 10 45
+```
+---
+### Functions on arrays
+
+Using a vector-style function on a vector structure will go down to the underlying vector, _unless_ the function is set up to handle arrays specially:
+
+``` r
+which(x.arr &gt; 9)
+```
+
+```
+## [1] 3 4
+```
+---
+Many functions _do_ preserve array structure:
+
+``` r
+y &lt;- -x
+y.arr &lt;- array(y,dim=c(2,2))
+y.arr + x.arr
+```
+
+```
+##      [,1] [,2]
+## [1,]    0    0
+## [2,]    0    0
+```
+
+Others specifically act on each row or column of the array separately:
+
+``` r
+rowSums(x.arr)
+```
+
+```
+## [1] 17 53
+```
+
+&lt;small&gt;We will see a lot more of this idea&lt;/small&gt;
+
+
+---
+### Example: Price of houses in PA
+
+Census data for California and Pennsylvania on housing prices,
+by Census "tract"
+
+``` r
+calif_penn &lt;- read_csv("data/calif_penn_2011.csv")
+penn &lt;- calif_penn |&gt; filter(STATEFP == '42') #|&gt; filter(!(Median_household_income &lt; 10000 &amp; Median_house_value &gt; 70000))#calif_penn[calif_penn$STATEFP == '42',]
+penn &lt;- penn[!penn$TRACTCE %in% c('961102', '000800'),]
+coefficients(lm(Median_house_value ~ Median_household_income, data=penn))
+```
+
+```
+##             (Intercept) Median_household_income 
+##           -26434.729858                3.655054
+```
+Fit a simple linear model, predicting median house price from median household income
+
+---
+Census tracts 24--425 are Allegheny county
+
+Tract 24 has a median income of `$14,719`; actual median house value is `$34,100` --- is that above or below what's?
+
+``` r
+34100 &lt; -26206.564 + 3.651*14719
+```
+
+```
+## [1] FALSE
+```
+
+Tract 25 has income `$48,102` and house price `$155,900`
+
+``` r
+155900 &lt; -26206.564 + 3.651*48102
+```
+
+```
+## [1] FALSE
+```
+
+What about tract 26?
+
+---
+
+We _could_ just keep plugging in numbers like this, but that's
+- boring and repetitive
+- error-prone (what if I forget to change the median income, or drop a minus sign from the intercept?)
+- obscure if we come back to our work later (what _are_ these numbers?)
+
+Use variables and names
+---
+
+``` r
+penn.coefs &lt;- coefficients(lm(Median_house_value ~ Median_household_income, data=penn))
+penn.coefs
+```
+
+```
+##             (Intercept) Median_household_income 
+##           -26434.729858                3.655054
+```
+
+
+``` r
+allegheny.rows &lt;- 24:425
+allegheny &lt;- penn |&gt; slice(allegheny.rows) |&gt; 
+  mutate(fitted = penn.coefs["(Intercept)"]+
+  penn.coefs["Median_household_income"]*Median_household_income)
+allegheny &lt;- allegheny[complete.cases(allegheny),]
+```
+
+---
+
+``` r
+allegheny |&gt; ggplot(aes(x = fitted, y = Median_house_value))+
+  geom_point()+
+  labs(x = "Model-predicted median house values",
+     y ="Actual median house values")+
+  geom_smooth() + geom_abline()
+```
+
+![](Chapter2_files/figure-html/unnamed-chunk-36-1.png)&lt;!-- --&gt;
+---
+
+``` r
+allegheny |&gt; ggplot(aes(x = Median_household_income))+
+  geom_histogram()
+```
+
+![](Chapter2_files/figure-html/unnamed-chunk-37-1.png)&lt;!-- --&gt;
+---
+### Running example: resource allocation ("mathematical programming")
+
+Factory makes cars and trucks, using labor and steel
+
+- a car takes 40 hours of labor and 1 ton of steel
+- a truck takes 60 hours and 3 tons of steel
+- resources: 1600 hours of labor and 70 tons of steel each week
+
+
+
+---
+### Matrices
+
+In R, a matrix is a specialization of a 2D array
+
+
+``` r
+factory &lt;- matrix(c(40,1,60,3),nrow=2)
+is.array(factory)
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+is.matrix(factory)
+```
+
+```
+## [1] TRUE
+```
+could also specify `ncol`, and/or `byrow=TRUE` to fill by rows.
+
+Element-wise operations with the usual arithmetic and comparison operators
+(e.g., `factory/3`)
+
+Compare whole matrices with `identical()` or `all.equal()`
+
+
+---
+### Matrix multiplication
+
+Gets a special operator
+
+
+``` r
+six.sevens &lt;- matrix(rep(7,6),ncol=3)
+six.sevens
+```
+
+```
+##      [,1] [,2] [,3]
+## [1,]    7    7    7
+## [2,]    7    7    7
+```
+
+``` r
+factory %*% six.sevens # [2x2] * [2x3]
+```
+
+```
+##      [,1] [,2] [,3]
+## [1,]  700  700  700
+## [2,]   28   28   28
+```
+
+&lt;small&gt;What happens if you try `six.sevens %*% factory`?&lt;/small&gt;
+
+
+---
+### Multiplying matrices and vectors
+
+Numeric vectors can act like proper vectors:
+
+``` r
+output &lt;- c(10,20)
+factory %*% output
+```
+
+```
+##      [,1]
+## [1,] 1600
+## [2,]   70
+```
+
+``` r
+output %*% factory
+```
+
+```
+##      [,1] [,2]
+## [1,]  420  660
+```
+&lt;small&gt;R silently casts the vector as either a row or a column matrix&lt;/small&gt;
+
+
+---
+### Matrix operators
+
+
+Transpose:
+
+``` r
+t(factory)
+```
+
+```
+##      [,1] [,2]
+## [1,]   40    1
+## [2,]   60    3
+```
+
+Determinant:
+
+``` r
+det(factory)
+```
+
+```
+## [1] 60
+```
+
+
+---
+### The diagonal
+
+The `diag()` function can extract the diagonal entries of a matrix:
+
+``` r
+diag(factory)
+```
+
+```
+## [1] 40  3
+```
+It can also _change_ the diagonal:
+
+``` r
+diag(factory) &lt;- c(35,4)
+factory
+```
+
+```
+##      [,1] [,2]
+## [1,]   35   60
+## [2,]    1    4
+```
+Re-set it for later:
+
+``` r
+diag(factory) &lt;- c(40,3)
+```
+
+
+---
+### Creating a diagonal or identity matrix
+
+
+``` r
+diag(c(3,4))
+```
+
+```
+##      [,1] [,2]
+## [1,]    3    0
+## [2,]    0    4
+```
+
+``` r
+diag(2)
+```
+
+```
+##      [,1] [,2]
+## [1,]    1    0
+## [2,]    0    1
+```
+
+
+---
+### Inverting a matrix
+
+
+``` r
+solve(factory)
+```
+
+```
+##             [,1]       [,2]
+## [1,]  0.05000000 -1.0000000
+## [2,] -0.01666667  0.6666667
+```
+
+``` r
+factory %*% solve(factory)
+```
+
+```
+##              [,1]          [,2]
+## [1,] 1.000000e+00 -2.220446e-15
+## [2,] 3.469447e-18  1.000000e+00
+```
+
+---
+### Why's it called "solve"" anyway?
+
+Solving the linear system `\(\mathbf{A}\vec{x} = \vec{b}\)` for `\(\vec{x}\)`:
+
+
+``` r
+available &lt;- c(1600,70)
+solve(factory,available)
+```
+
+```
+## [1] 10 20
+```
+
+``` r
+factory %*% solve(factory,available)
+```
+
+```
+##      [,1]
+## [1,] 1600
+## [2,]   70
+```
+
+---
+### Names in matrices
+
+We can name either rows or columns or both, with `rownames()` and `colnames()`
+
+These are just character vectors, and we use the same function to get and to set their values
+
+Names help us understand what we're working with
+
+Names can be used to coordinate different objects
+
+---
+
+``` r
+rownames(factory) &lt;- c("labor","steel")
+colnames(factory) &lt;- c("cars","trucks")
+factory
+```
+
+```
+##       cars trucks
+## labor   40     60
+## steel    1      3
+```
+
+``` r
+available &lt;- c(1600,70)
+names(available) &lt;- c("labor","steel")
+```
+
+---
+
+``` r
+output &lt;- c(20,10)
+names(output) &lt;- c("trucks","cars")
+factory %*% output # But we've got cars and trucks mixed up!
+```
+
+```
+##       [,1]
+## labor 1400
+## steel   50
+```
+
+``` r
+factory %*% output[colnames(factory)]
+```
+
+```
+##       [,1]
+## labor 1600
+## steel   70
+```
+
+``` r
+all(factory %*% output[colnames(factory)] &lt;= available[rownames(factory)])
+```
+
+```
+## [1] TRUE
+```
+Notice: Last lines don't have to change if we add motorcycles as output or rubber and glass as inputs (abstraction again)
+
+---
+### Doing the same thing to each row or column
+
+Take the mean: `rowMeans()`, `colMeans()`: input is matrix,
+output is vector.  Also `rowSums()`, etc.
+
+`summary()`: vector-style summary of column
+
+
+``` r
+colMeans(factory)
+```
+
+```
+##   cars trucks 
+##   20.5   31.5
+```
+
+``` r
+summary(factory)
+```
+
+```
+##       cars           trucks     
+##  Min.   : 1.00   Min.   : 3.00  
+##  1st Qu.:10.75   1st Qu.:17.25  
+##  Median :20.50   Median :31.50  
+##  Mean   :20.50   Mean   :31.50  
+##  3rd Qu.:30.25   3rd Qu.:45.75  
+##  Max.   :40.00   Max.   :60.00
+```
+
+---
+`apply()`, takes 3 arguments: the array or matrix, then 1 for rows and 2 for columns, then name of the function to apply to each
+
+
+``` r
+rowMeans(factory)
+```
+
+```
+## labor steel 
+##    50     2
+```
+
+``` r
+apply(factory,1,mean)
+```
+
+```
+## labor steel 
+##    50     2
+```
+
+&lt;small&gt;What would `apply(factory,1,sd)` do?&lt;/small&gt;
+
+
+---
+### Lists
+
+Sequence of values, _not_ necessarily all of the same type
+
+
+``` r
+my.distribution &lt;- list("exponential",7,FALSE)
+my.distribution
+```
+
+```
+## [[1]]
+## [1] "exponential"
+## 
+## [[2]]
+## [1] 7
+## 
+## [[3]]
+## [1] FALSE
+```
+
+Most of what you can do with vectors you can also do with lists
+
+---
+### Accessing pieces of lists
+
+Can use `[ ]` as with vectors  
+or use `[[ ]]`, but only with a single index  
+`[[ ]]` drops names and structures, `[ ]` does not
+
+``` r
+is.character(my.distribution)
+```
+
+```
+## [1] FALSE
+```
+
+``` r
+is.character(my.distribution[[1]])
+```
+
+```
+## [1] TRUE
+```
+
+``` r
+my.distribution[[2]]^2
+```
+
+```
+## [1] 49
+```
+&lt;small&gt;What happens if you try `my.distribution[2]^2`?&lt;/small&gt;
+&lt;small&gt;What happens if you try `[[ ]]` on a vector?&lt;/small&gt;
+
+``` r
+#my.distribution[2]^2
+available[[2]]
+```
+
+```
+## [1] 70
+```
+
+---
+### Expanding and contracting lists
+
+Add to lists with `c()` (also works with vectors):
+
+``` r
+my.distribution &lt;- c(my.distribution,7)
+my.distribution
+```
+
+```
+## [[1]]
+## [1] "exponential"
+## 
+## [[2]]
+## [1] 7
+## 
+## [[3]]
+## [1] FALSE
+## 
+## [[4]]
+## [1] 7
+```
+
+---
+Chop off the end of a list by setting the length to something smaller (also works with vectors):
+
+``` r
+length(my.distribution)
+```
+
+```
+## [1] 4
+```
+
+``` r
+length(my.distribution) &lt;- 3
+my.distribution
+```
+
+```
+## [[1]]
+## [1] "exponential"
+## 
+## [[2]]
+## [1] 7
+## 
+## [[3]]
+## [1] FALSE
+```
+
+---
+### Naming list elements
+
+We can name some or all of the elements of a list
+
+``` r
+names(my.distribution) &lt;- c("family","mean","is.symmetric")
+my.distribution
+```
+
+```
+## $family
+## [1] "exponential"
+## 
+## $mean
+## [1] 7
+## 
+## $is.symmetric
+## [1] FALSE
+```
+
+``` r
+my.distribution[["family"]]
+```
+
+```
+## [1] "exponential"
+```
+
+``` r
+my.distribution["family"]
+```
+
+```
+## $family
+## [1] "exponential"
+```
+
+
+---
+
+Lists have a special short-cut way of using names, `$` (which removes names and structures):
+
+``` r
+my.distribution[["family"]]
+```
+
+```
+## [1] "exponential"
+```
+
+``` r
+my.distribution$family
+```
+
+```
+## [1] "exponential"
+```
+
+---
+### Names in lists (cont'd.)
+
+Creating a list with names:
+
+``` r
+another.distribution &lt;- list(family="gaussian",mean=7,sd=1,is.symmetric=TRUE)
+```
+
+Adding named elements:
+
+``` r
+my.distribution$was.estimated &lt;- FALSE
+my.distribution[["last.updated"]] &lt;- "2011-08-30"
+```
+
+Removing a named list element, by assigning it the value `NULL`:
+
+``` r
+my.distribution$was.estimated &lt;- NULL
+```
+
+---
+### Key-Value pairs
+
+Lists give us a way to store and look up data by _name_, rather than by _position_
+
+A really useful programming concept with many names: **key-value pairs**, **dictionaries**, **associative arrays**, **hashes**
+
+If all our distributions have components named `family`, we can look that up by name, without caring where it is in the list
+
+
+---
+### Dataframes
+
+Dataframe = the classic data table, `\(n\)` rows for cases, `\(p\)` columns for variables
+
+Lots of the really-statistical parts of R presume data frames
+&lt;small&gt;`penn` from last time was really a dataframe&lt;/small&gt;
+
+Not just a matrix because *columns can have different types*
+
+Many matrix functions also work for dataframes (`rowSums()`, `summary()`, `apply()`)
+
+&lt;small&gt;but no matrix multiplying dataframes, even if all columns are numeric&lt;/small&gt;
+
+---
+
+``` r
+a.matrix &lt;- matrix(c(35,8,10,4),nrow=2)
+colnames(a.matrix) &lt;- c("v1","v2")
+a.matrix
+```
+
+```
+##      v1 v2
+## [1,] 35 10
+## [2,]  8  4
+```
+
+``` r
+a.matrix[,"v1"]  # Try a.matrix$v1 and see what happens
+```
+
+```
+## [1] 35  8
+```
+
+---
+
+``` r
+a.data.frame &lt;- data.frame(a.matrix,logicals=c(TRUE,FALSE))
+a.data.frame
+```
+
+```
+##   v1 v2 logicals
+## 1 35 10     TRUE
+## 2  8  4    FALSE
+```
+
+``` r
+a.data.frame$v1
+```
+
+```
+## [1] 35  8
+```
+
+``` r
+a.data.frame[,"v1"]
+```
+
+```
+## [1] 35  8
+```
+
+``` r
+a.data.frame[1,]
+```
+
+```
+##   v1 v2 logicals
+## 1 35 10     TRUE
+```
+
+``` r
+colMeans(a.data.frame)
+```
+
+```
+##       v1       v2 logicals 
+##     21.5      7.0      0.5
+```
+---
+### Adding rows and columns
+
+We can add rows or columns to an array or data-frame with `rbind()` and `cbind()`, but be careful about forced type conversions
+
+``` r
+rbind(a.data.frame,list(v1=-3,v2=-5,logicals=TRUE))
+```
+
+```
+##   v1 v2 logicals
+## 1 35 10     TRUE
+## 2  8  4    FALSE
+## 3 -3 -5     TRUE
+```
+
+``` r
+rbind(a.data.frame,c(3,4,6))
+```
+
+```
+##   v1 v2 logicals
+## 1 35 10        1
+## 2  8  4        0
+## 3  3  4        6
+```
+
+---
+### Structures of Structures
+
+So far, every list element has been a single data value
+
+List elements can be other data structures, e.g., vectors and matrices:
+
+``` r
+plan &lt;- list(factory=factory, available=available, output=output)
+plan$output
+```
+
+```
+## trucks   cars 
+##     20     10
+```
+
+Internally, a dataframe is basically a list of vectors
+
+---
+### Structures of Structures (cont'd.)
+
+List elements can even be other lists  
+which may contain other data structures  
+including other lists  
+which may contain other data structures...
+
+This **recursion** lets us build arbitrarily complicated data structures from the basic ones
+
+Most complicated objects are (usually) lists of data structures
+
+
+
+---
+### Example: Eigenstuff
+
+`eigen()` finds eigenvalues and eigenvectors of a matrix  
+Returns a list of a vector (the eigenvalues) and a matrix (the eigenvectors)
+
+
+``` r
+eigen(factory)
+```
+
+```
+## eigen() decomposition
+## $values
+## [1] 41.556171  1.443829
+## 
+## $vectors
+##            [,1]       [,2]
+## [1,] 0.99966383 -0.8412758
+## [2,] 0.02592747  0.5406062
+```
+
+``` r
+class(eigen(factory))
+```
+
+```
+## [1] "eigen"
+```
+
+---
+With complicated objects, you can access parts of parts (of parts...)
+
+``` r
+factory %*% eigen(factory)$vectors[,2]
+```
+
+```
+##             [,1]
+## labor -1.2146583
+## steel  0.7805429
+```
+
+``` r
+eigen(factory)$values[2] * eigen(factory)$vectors[,2]
+```
+
+```
+## [1] -1.2146583  0.7805429
+```
+
+``` r
+eigen(factory)$values[2]
+```
+
+```
+## [1] 1.443829
+```
+
+``` r
+eigen(factory)[[1]][[2]] # NOT [[1,2]]
+```
+
+```
+## [1] 1.443829
+```
+---
+### Summary
+
+- Arrays add multi-dimensional structure to vectors
+- Matrices act like you'd hope they would
+- Lists let us combine different types of data
+- Dataframes are hybrids of matrices and lists, for classic tabular data
+- Recursion lets us build complicated data structures out of the simpler ones
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

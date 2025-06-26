@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Date Science with R</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Peng Zhang" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Date Science with R
+]
+.subtitle[
+## Simulation methods
+]
+.author[
+### Peng Zhang
+]
+.institute[
+### School of Mathematical Sciences, Zhejiang University
+]
+.date[
+### 2025/07/01
+]
+
+---
+
+
+
+## Agenda
+
+- Writing simulations using random number generation
+- From the jackknife to the bootstrap
+- Processes that have memory
+- Finally, `for` loops!
+
+### `[dpqr]unif`, etc.
+
+Recall how we drew from various distributions: `runif()`: draws from the uniform distribution (others follow)
+
+Home-baked discrete distributions: Use `sample()`
+
+
+``` r
+population.values &lt;- 1:3
+probs &lt;- c(5,2,3)
+my.draw &lt;- sample (population.values, 100000, probs, replace=TRUE)
+table(my.draw)
+```
+
+```
+## my.draw
+##     1     2     3 
+## 49757 20077 30166
+```
+---
+### Permutations with `sample()`
+
+`sample()` is powerful -- it works on any object that has a defined `length()`. Permutations:
+
+
+``` r
+sample(1:6)
+```
+
+```
+## [1] 1 6 4 2 3 5
+```
+
+``` r
+replicate(3,sample(c("Curly","Larry","Moe","Shemp")))
+```
+
+```
+##      [,1]    [,2]    [,3]   
+## [1,] "Curly" "Shemp" "Curly"
+## [2,] "Larry" "Larry" "Moe"  
+## [3,] "Shemp" "Curly" "Larry"
+## [4,] "Moe"   "Moe"   "Shemp"
+```
+
+``` r
+sample(list("A",3,sum))
+```
+
+```
+## [[1]]
+## [1] "A"
+## 
+## [[2]]
+## function (..., na.rm = FALSE)  .Primitive("sum")
+## 
+## [[3]]
+## [1] 3
+```
+---
+### Resampling with `sample()`
+
+Resampling from any existing distribution gets us the **bootstrap** family of estimators:
+
+
+``` r
+bootstrap.resample &lt;- function (object){
+  sample (object, length(object), replace=TRUE)}
+replicate(5, bootstrap.resample (6:10))
+```
+
+```
+##      [,1] [,2] [,3] [,4] [,5]
+## [1,]    6    8    7   10   10
+## [2,]    8   10    7    7    6
+## [3,]    6    7    9    6    6
+## [4,]    9    9    9    7    6
+## [5,]    7   10    6    9    6
+```
+
+Recall: the *jackknife* worked by removing one point from the sample and recalculating the statistic of interest. Here we resample the same length with replacement.
+---
+### Bootstrap test
+
+The 2-sample `t`-test checks for differences in means according to a known null distribution. Let's resample and generate the sampling distribution under the bootstrap assumption:
+
+
+``` r
+library(MASS)
+```
+
+```
+## 
+## Attaching package: 'MASS'
+```
+
+```
+## The following object is masked from 'package:dplyr':
+## 
+##     select
+```
+
+``` r
+diff.in.means &lt;- function(df) {
+  mean(df[df$Sex=="M","Hwt"]) - mean(df[df$Sex=="F","Hwt"])
+}
+resample.diffs &lt;- replicate(1000, 
+  diff.in.means(cats[bootstrap.resample(1:nrow(cats)),]))
+```
+---
+
+``` r
+tibble(d = resample.diffs) %&gt;% ggplot(mapping = aes(x = d))+
+  geom_histogram(bins = 25)+
+  geom_vline(aes(xintercept = diff.in.means(cats)), col='red')
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-5-1.png)&lt;!-- --&gt;
+---
+### Dependence
+
+Most interesting examples in probability have a little dependence added in: "If it rained yesterday, what is the probability it rains today?"
+
+Use this to generate weather patterns and probabilities for some time in the future. Almost always occurs with time series; can occur with other dependence (spatial -- if it's sunny in Dallas today, will it also be sunny in Fort Worth?)
+
+#### Markov Dependence
+
+Suppose we have a sequence of observations that are dependent. In a time series, what happens next depends on what happened before:
+
+`\(p(X_1, X_2, ..., X_n) = p(X_1)p(X_2|X_1)...p(X_n|X_{n-1},...,X_1)\)`
+
+(Note: you could, of course, condition on the future to predict the past, if you had a time machine.)
+
+Markov dependence: each outcome only depends on the one that came before.
+
+`\(p(X_1, X_2, ..., X_n) = p(X_1)\prod_{i=2}^np(X_i|X_{i-1})\)`
+---
+### Generating a Markov Chain
+
+1. Set up the conditional distribution.
+2. Draw the initial state of the chain.
+3. For every additional draw, use the previous draw to inform the new one.
+
+Simple weather model: 
+- if it was sunny yesterday, today's chance of sun is 80%.
+- if it wasn't sunny yesterday, today's chance of sun is 20%.
+
+Simulate for one year (at the equator?)
+
+
+``` r
+sunny.year &lt;- rep(NA, 365)
+sunny.year[1] &lt;- 1
+for (day in 2:365) {
+  sunny.year[day] &lt;- rbinom(1,1,0.2 + 0.6*sunny.year[day-1])}
+```
+---
+### And `for` loops are back in play!
+
+
+``` r
+tibble(x = 1:365, y = sunny.year) %&gt;% ggplot(aes(x = x, y = y))+
+  geom_line()+
+  labs(title="Sunny Days in An Equatorial City", x="Day", y="Sunshine?")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+---
+### Different From Independence
+
+
+``` r
+boring.year &lt;- tibble(day = 1:365, rain = rbinom(365, 1, 0.5))
+boring.year %&gt;% ggplot(aes(x = day, y = rain))+ 
+  geom_line()+
+  labs(title="Sunny Days in A Coin Flip City", x="Day", ylab="Sunshine?")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-8-1.png)&lt;!-- --&gt;
+---
+### The above chain
+
+Transitions are represented as a matrix: `\(Q_{ij}\)` is `\(P(X_t = j|X_{t-1} = i)\)`.
+
+
+```
+##      [,1] [,2]
+## [1,]  0.8  0.2
+## [2,]  0.2  0.8
+```
+
+#### Flippy chain
+
+
+``` r
+weird.year &lt;- rep(NA, 365)
+weird.year[1] &lt;- 1
+transition.matrix &lt;- matrix (c(0.2, 0.8, 0.8, 0.2), nrow=2)
+for (day in 2:365) weird.year[day] &lt;- 
+  sample(1:2, 1, prob=transition.matrix[weird.year[day-1],])
+weird.year &lt;- weird.year - 1
+```
+---
+
+``` r
+tibble(day = 1:365, rain = weird.year) %&gt;% 
+ggplot(aes(x = day, y = rain))+
+  geom_line()+
+  labs(title="Sunny Days in Al Gore's Nightmare", x="Day", y="Sunshine?")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-11-1.png)&lt;!-- --&gt;
+---
+### General Markov Chain
+
+
+``` r
+rmarkovchain &lt;- function (nn, transition.matrix, 
+    start=sample(1:nrow(transition.matrix), 1)) {
+  output &lt;- rep (NA, nn)
+  output[1] &lt;- start
+  for (day in 2:nn) output[day] &lt;- 
+    sample(ncol(transition.matrix), 1, 
+           prob=transition.matrix[output[day-1],])
+}
+```
+---
+### Simple Unbounded Markov Chain
+
+"Unbiased Random Walk": Independent events atop a dependent structure.
+
+
+``` r
+randomwalk &lt;- function (nn, upprob=0.5, start=50) {
+  output &lt;- rep (NA, nn)
+  output[1] &lt;- start
+  for (iteration in 2:nn) 
+    output[iteration] &lt;- 
+      output[iteration-1] + 2*rbinom(1, 1, upprob) - 1
+  output  
+}
+```
+---
+
+``` r
+tibble(x = 1:10000, y = randomwalk(10000, start=200)) %&gt;% 
+  ggplot(aes(x, y))+ geom_line()+
+  labs(title="Simple Random Walk")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-14-1.png)&lt;!-- --&gt;
+---
+### Simple Unbounded Markov Chain
+
+
+``` r
+tibble(x = 1:10000, y = randomwalk(10000, start=200)) %&gt;% 
+  ggplot(aes(x, y))+ geom_line()+
+  labs(title="Simple Random Walk")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-15-1.png)&lt;!-- --&gt;
+---
+### Simple Unbounded Markov Chain
+
+
+``` r
+tibble(x = 1:10000, y = randomwalk(10000, start=200)) %&gt;% 
+  ggplot(aes(x, y))+ geom_line()+
+  labs(title="Simple Random Walk")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-16-1.png)&lt;!-- --&gt;
+---
+### Simple Unbounded Markov Chain
+
+
+``` r
+tibble(x = 1:10000, y = randomwalk(10000, start=200)) %&gt;% 
+  ggplot(aes(x, y))+ geom_line()+
+  labs(title="Simple Random Walk")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-17-1.png)&lt;!-- --&gt;
+
+
+### Applications to Probability
+
+Where the Bayesian revolution takes over: drawing from complex probability distributions
+
+- rejection sampling
+- The Metropolis algorithm
+- General introduction to "Markov Chain Monte Carlo" 
+
+#### One-dimension probability distributions
+
+We have [dpqr]{norm, binom, pois, ...} for known distributions. For many good reasons, we'd like to be able to: 
+
+- draw from complex distributions
+- find the solution to relevant integrals
+- eventually, go to many higher dimensions
+---
+What's available?
+
+#### Integration by Simulation
+
+Law of large numbers: if `\(X_1, X_2, \ldots X_n\)` all IID with p.d.f. `\(p\)`,
+
+`$$\frac{1}{n}\sum_{i=1}^{n}{f(X_i)} \rightarrow \mathbb{E}_{p}[f(X)] =
+  \int{f(x) p(x) dx}$$`
+
+The **Monte Carlo principle**: to find `\(\int{g(x) dx}\)`, draw from `\(p\)` and take the sample mean of `\(f(x) = g(x)/p(x)\)`.
+
+
+#### And it works, too
+
+Central limit theorem:
+
+`$$\frac{1}{n}\sum_{i=1}^{n}{\frac{g(x_i)}{p(x_i)}} \rightsquigarrow
+  \mathcal{N}\left(\int{g(x)dx}, \frac{\sigma^2_{g/p}}{n}\right)$$`
+
+The Monte Carlo approximation to the integral is unbiased, with root mean square error `\(\propto n^{-1/2}\)` -- just keep taking Monte Carlo draws, and the error gets as small as you like, even if `\(g\)` or `\(x\)` are very complicated.
+---
+
+### Taking unknown samples
+
+Generating from `\(p\)` is easy if it's a standard distribution or we have a nice, invertible CDF (quantile method). What can we do if all we've got is the probability density function `\(p\)`?
+
+Suppose the pdf `\(f\)` is zero outside an interval `\([c,d]\)`, and `\(\leq M\)` on the interval.
+
+![](Chapter7_files/figure-html/unnamed-chunk-18-1.png)&lt;!-- --&gt;
+---
+### Rejection sampling
+
+We know how to draw from uniform distributions in any dimension. Do it in two:
+
+
+``` r
+x1 &lt;- runif(300, 0, 1); y1 &lt;- runif(300, 0, 2.6); 
+selected &lt;- y1 &lt; dbeta(x1, 3, 6)
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-20-1.png)&lt;!-- --&gt;
+---
+### Rejection sampling
+
+
+``` r
+mean(selected)
+```
+
+```
+## [1] 0.37
+```
+
+``` r
+accepted.points &lt;- x1[selected]
+mean(accepted.points &lt; 0.5)
+```
+
+```
+## [1] 0.8468468
+```
+
+``` r
+pbeta(0.5, 3, 6)
+```
+
+```
+## [1] 0.8554688
+```
+
+For this to work efficiently: we have to cover the target distribution with one that sits close to it. 
+
+
+``` r
+x2 &lt;- runif(100000, 0, 1); y2 &lt;- runif(100000, 0, 10); 
+selected &lt;- y2 &lt; dbeta(x2, 3, 6)
+mean(selected)
+```
+
+```
+## [1] 0.09863
+```
+
+
+``` r
+png('figures/rejection.png', width = 500, height = 350, units = 'mm', res = 500)
+plot(c(0,1), c(0,6), ty="n", main="A Sample Distribution", 
+     ylab="Density f(x)", xlab="x")
+curve (dbeta(x, 3, 6), add=TRUE)
+lines(c(0,0,1,1), c(0,3,3,0))
+points (x2, y2, col=1+1*selected, cex=0.1)
+dev.off()
+```
+---
+## Rejection sampling
+
+&lt;img src="figures/rejection.png" width="13123" height="500px" /&gt;
+---
+### Metropolis Algorithm
+
+(Really: Metropolis, Rosenbluth x2, Teller x2, 1953)
+
+Rejection sampling works if we know the complete distribution `\(p(x)\)`, with `\(\int p(x) = 1\)`. For many, many problems, we know the function up to the normalizing constant.
+
+Example: Equations of the canonical ensemble of energy formations in the state of uncontrolled hydrogen fusion,
+
+`$$p(E) = \frac{1}{|Z|} exp(f(E)/kT)$$`
+
+`\(|Z|\)` is legendarily hard to calculate precisely.
+---
+### Basic Metropolis
+
+On integer steps:
+
+
+``` r
+metropolis.one &lt;- function (xx, fun=dpois, ...) {
+  prop &lt;- 2*rbinom(1,1,0.5) - 1 + xx
+  acc.ratio &lt;- fun(prop, ...)/fun(xx, ...)
+  output &lt;- if (acc.ratio &gt; runif(1)) prop else xx
+  output
+}
+replicate (10, metropolis.one(10, lambda=5))
+```
+
+```
+##  [1]  9 10  9  9  9  9  9 11 11 10
+```
+
+
+``` r
+start &lt;- 50
+draws &lt;- rep(NA, 10000)
+for (iteration in 1:10000) {
+  start &lt;- metropolis.one (start, lambda= 10)
+  draws[iteration] &lt;- start
+}
+```
+---
+### Basic Metropolis
+
+
+``` r
+tibble(n = 1:10000, draws = draws) %&gt;% 
+  ggplot(aes(n, draws))+ geom_point()
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-27-1.png)&lt;!-- --&gt;
+---
+### Basic Metropolis
+
+Have to discard the initial state for "burn-in"
+
+
+``` r
+tibble(n = 201:10000, draws = draws[-(1:200)]) %&gt;% 
+  ggplot(aes(n, draws))+ geom_point()
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-28-1.png)&lt;!-- --&gt;
+
+---
+
+### Basic Metropolis
+
+Have to discard the initial state for "burn-in"
+
+
+``` r
+tibble(draws = draws[-(1:200)], poir = rpois(9800, 10)) %&gt;% 
+  ggplot()+
+  geom_histogram(aes(x = draws), bins = 20, alpha = 0.6)+
+  geom_histogram(aes(x = poir), bins = 20, col='red', alpha = 0.6)
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-29-1.png)&lt;!-- --&gt;
+
+---
+
+### Basic Metropolis
+
+On integer steps:
+
+
+``` r
+metropolis.cts &lt;- function (xx, fun=dgamma, ...) {
+  prop &lt;- rnorm(1, xx, 1)
+  acc.ratio &lt;- fun(prop, ...)/fun(xx, ...)
+  output &lt;- if (acc.ratio &gt; runif(1)) prop else xx
+  output
+}
+replicate (20, metropolis.cts(20, shape=100, rate=10))
+```
+
+```
+##  [1] 19.53511 20.00000 20.00000 19.70203 20.00000 20.00000 19.26523 20.00000
+##  [9] 19.02583 20.00000 19.26204 19.93032 20.00000 20.00000 20.00000 20.00000
+## [17] 20.00000 20.00000 20.07457 20.00000
+```
+
+
+``` r
+start &lt;- 50
+draws &lt;- rep(NA, 100000)
+for (iteration in 1:100000) {
+  start &lt;- metropolis.cts (start, fun=dgamma, shape=100, rate=10)
+  draws[iteration] &lt;- start
+}
+```
+---
+### Basic Metropolis
+
+
+``` r
+tibble(n = 1:100000, draws = draws) %&gt;% 
+  ggplot(aes(n, draws))+ geom_point()
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-32-1.png)&lt;!-- --&gt;
+
+---
+### Basic Metropolis
+
+Have to discard the initial state for "burn-in"
+
+
+``` r
+tibble(n = 201:100000, draws = draws[-(1:200)]) %&gt;% 
+  ggplot(aes(n, draws))+ geom_point()
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-33-1.png)&lt;!-- --&gt;
+
+---
+### Basic Metropolis
+
+Have to discard the initial state for "burn-in"
+
+
+``` r
+tibble(draws = draws[-(1:200)], gamr = rgamma(99800, 100, 10)) %&gt;%
+  ggplot()+
+  geom_histogram(aes(x = draws), bins = 20, alpha = 0.6)+
+  geom_histogram(aes(x = gamr), bins = 20, col='red', alpha = 0.6)
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-34-1.png)&lt;!-- --&gt;
+
+### More use for simulations
+
+- Simulations instead of probability calculations
+- Simulations as models
+- Building simulations
+    + Live coding of a simulation model under the direction of the class
+
+
+#### Previously
+- Drawing independent random variables
+- Making random variables dependent on each other
+- Using Monte Carlo to short-cut integration
+
+#### vs. Probability Calculations
+
+- Monte Carlo:
+`$$\int{g(x) p(x) dx} \approx \frac{1}{n}\sum_{i=1}^{n}{g(X_i)} ~ \mathrm{when} ~ X_i \sim p$$`
+- Not just integrals:
+Probability of anything `\(\approx\)` how often does it happen in the simulation
+---
+### Example: Prediction Intervals
+
+Returns of the S\&amp;P 500 index:
+
+``` r
+SP &lt;- read_excel("data/Stock_Bond.xls") %&gt;% dplyr::select(Date, `S&amp;P_AC`) %&gt;%
+  rename(Index = `S&amp;P_AC`)
+SP.returns &lt;- na.omit(as.vector(diff(log(SP$Index))))
+```
+
+#### Prediction Intervals
+
+Regress tomorrow's returns on today's:
+
+``` r
+SP.ar &lt;- lm(SP.returns[-1] ~ SP.returns[-length(SP.returns)])
+coefficients(SP.ar)
+```
+
+```
+##                     (Intercept) SP.returns[-length(SP.returns)] 
+##                    0.0003319729                    0.0008719661
+```
+---
+
+### Example: Prediction Intervals
+
+
+``` r
+SPrf &lt;- tibble(day = 1:(length(SP.returns)-1), obs = SP.returns[-1], 
+  fitted = fitted(SP.ar)) 
+SPrf %&gt;%  ggplot() + geom_point(aes(x = day, y = obs))+
+  geom_point(aes(x = day, y = fitted), col="blue")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-37-1.png)&lt;!-- --&gt;
+---
+### Example: Prediction Intervals
+
+Could work out prediction intervals from theory, if they were Gaussian
+... or just simulate
+
+
+``` r
+prediction.interval &lt;- function(model, confidence=0.95, n=1e3) {
+  residuals &lt;- residuals(model)
+  sim &lt;- sample(residuals, size=n, replace=TRUE)
+  lower.limit &lt;- (1-confidence)/2
+  upper.limit &lt;- 1-lower.limit
+  return(quantile(sim, c(lower.limit, upper.limit)))
+}
+(SP.interval95 &lt;- prediction.interval(SP.ar))
+```
+
+```
+##        2.5%       97.5% 
+## -0.01907051  0.02080649
+```
+---
+### Example: Prediction Intervals
+
+
+``` r
+SPrf %&gt;% mutate(lowbound = fitted + SP.interval95[1], 
+  upbound = fitted + SP.interval95[2])  %&gt;% ggplot() +
+  geom_point(aes(x = day, y = obs))+
+  geom_point(aes(x = day, y = fitted), col="blue")+
+  geom_line(aes(x = day, y = lowbound), linetype= 2, col="blue")+
+  geom_line(aes(x = day, y = upbound), linetype= 2, col="blue")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-39-1.png)&lt;!-- --&gt;
+---
+### Simulations as Models
+- Sometimes the only convenient way to specify the statistical model is as a simulation
+  + Lots of details, no simplifying math
+- Running the simulation is then how we see what the model does at given
+parameters
+- Fit by matching simulation output to data
+
+#### Example: Antibiotics Again
+- Doctors have either adopted or they haven't
+- Every day, two random doctors meet
+- If one has adopted but the other hasn't, the hold-out adopts with probability `\(p\)`
+- Look at number of adoptions over time
+
+This was originally a model of disease spread, but now the "disease" is adopting a new drug
+---
+### Example: Antibiotics Again
+
+Code written by section 1:
+
+``` r
+sim_doctors_1 &lt;- function(num.doctors, num.days, initial_doctors, p) {
+  # Remember to set up all_doctors
+  all_doctors &lt;- 1:num.doctors
+  # Remember to set up has_adopted as binary vector
+  has_adopted &lt;- matrix(0,nrow=num.doctors,ncol=num.days)
+  # Set some doctors to have initially adopted
+    # initial_doctors are indices of doctors who are using as of day 1
+  has_adopted[initial_doctors,1:num.days] &lt;- 1
+  for (today in 1:num.days) {
+    # pull two random doctors
+    todays_doctors &lt;- sample(all_doctors,size=2,replace=FALSE)
+    # check that one has adopted and the other hasn't
+    if(sum(has_adopted[todays_doctors,today])==1) {
+      # make the non-adopter adopt with probability p
+      which_of_todays &lt;- which(has_adopted[todays_doctors,today]==0)
+      receiver &lt;- todays_doctors[which_of_todays]
+      has_adopted[receiver,today:num.days] &lt;- rbinom(n=1,size=1,prob=p)
+    }
+  }
+  return(has_adopted)
+}
+```
+---
+### Example: Antibiotics Again
+
+Code written by section 2:
+
+``` r
+sim_doctors_2 &lt;- function(num.doctors,num.meetings,starting_adopters, prob) {
+  # vector to keep track of which doctors have adopted
+  has_adopted &lt;- rep(FALSE, num.doctors)
+  # Set some to have adopted initially
+  has_adopted[1:round(starting_adopters*num.doctors)] &lt;- TRUE
+  # matrix to keep track of adoptions over time
+  adoptions_vs_time &lt;- matrix(FALSE,nrow=num.doctors,ncol=num.meetings)
+  for (meeting in 1:num.meetings) {
+    # select 2 doctors at random
+    meeting_pair &lt;- sample(1:num.doctors,size=2)
+    # check whether exactly one selected doctor has adopted
+    if(has_adopted[meeting_pair[1]] != has_adopted[meeting_pair[2]]) {
+      # With probability prob., update the vector of adopters
+      if(rbinom(n=1,size=1,prob=prob)) { has_adopted[meeting_pair] &lt;- TRUE }
+    }
+    # update adoptions_vs_time matrix
+    adoptions_vs_time[,meeting] &lt;- has_adopted    
+  }
+  return(adoptions_vs_time)
+}
+```
+---
+### Example: Antibiotics Again
+
+
+``` r
+sim2 &lt;- sim_doctors_2(num.doctors=10,num.meetings=10,starting_adopters=0.1,prob=1.0)
+```
+- Start small for debugging
+- Making transmission always successful lets us see about updating
+---
+
+``` r
+tibble(m = 1:ncol(sim2), n = colSums(sim2)) %&gt;% 
+  ggplot(aes(m, n))+ 
+  geom_point() + labs(x = "Meeting", y ="Number of adoptees")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-43-1.png)&lt;!-- --&gt;
+---
+### Example: Antibiotics Again
+
+Maybe not that small?  With only 10 time-steps it's pretty likely we never pick the one initial adoptee
+---
+
+``` r
+sim2.1 &lt;- sim_doctors_2(num.doctors=10,num.meetings=100,starting_adopters=0.1,prob=1.0)
+tibble(m = 1:ncol(sim2.1), n = colSums(sim2.1)) %&gt;%     
+  ggplot(aes(m, n)) + 
+  geom_point() + labs(x = "Meeting", y ="Number of adoptees")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-44-1.png)&lt;!-- --&gt;
+---
+### Example: Antibiotics Again
+
+
+``` r
+sim.big &lt;- sim_doctors_2(num.doctors=1000,num.meetings=10000,starting_adopters=0.01,prob=0.5)
+tibble(m = 1:ncol(sim.big), n = colSums(sim.big)) %&gt;%     
+  ggplot(aes(m, n)) + 
+  geom_point() + labs(x="Meeting",y="Number of adoptees")
+```
+
+![](Chapter7_files/figure-html/unnamed-chunk-45-1.png)&lt;!-- --&gt;
+
+Elapsed time from starting to code to final figure: 20 minutes
+---
+### Example: Antibiotics Again
+
+- These **logistic** or **sigmoid** curves are very characteristic of actual product-adoption curves, and of a lot of epidemiology
+- This is the "susceptible-infectious" (SI) model
+Lots of variants
+    + susceptible-infectious-susceptible (SIS), susceptible-infectious-recovered (SIR)
+    + multiple stages of infectiousness
+    + competing infections
+    + can only transmit to network neighbors, not random pairing
+    + etc., etc.
+
+### Summary
+
+- When we don't have exact probability formulas or they don't apply, we can simulate to get arbitrarily-good approximations
+- If we can describe the process of our model, we can set up a simulation of it
+
+
+
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
