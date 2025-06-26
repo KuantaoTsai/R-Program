@@ -1,0 +1,7 @@
+Hello Everyonne. Now I'm trying to write some meaningless words just to check whether what I learned today is smoothly running. Here I'm going to establish some calculation.
+```{r}
+seq(1,20,2)
+(1+10^-9)^(10^9)
+
+    
+```
